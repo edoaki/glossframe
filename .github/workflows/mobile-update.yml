@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '取り込む公式バージョン（タグ名またはコミットSHA。未指定はmain）'
+        description: '取り込む公式バージョン（タグ名またはコミットSHA。未指定はmobile-setup-preview）'
         required: false
-        default: main
+        default: mobile-setup-preview
 permissions:
   contents: write
 concurrency:
