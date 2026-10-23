@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { ArrowRight, Loader2, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { errorMessage } from "../lib/api";
+import { api, errorMessage } from "../lib/api";
 import { PasswordInput } from "../components/PasswordInput";
 
 export function AuthPage({ mode }: { mode: "login" | "setup" }) {
   const { appName, login, setup } = useApp();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [recoveryToken, setRecoveryToken] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recovered, setRecovered] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +40,24 @@ export function AuthPage({ mode }: { mode: "login" | "setup" }) {
     }
   }
 
+  async function recover(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/auth/recover", { method: "POST", body: { token: recoveryToken, newPassword: recoveryPassword } });
+      setRecoveryToken("");
+      setRecoveryPassword("");
+      setPassword("");
+      setRecovered(true);
+      setShowHelp(false);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="auth-page">
       <div className="auth-card fade-in">
@@ -54,10 +75,11 @@ export function AuthPage({ mode }: { mode: "login" | "setup" }) {
           <p>
             {isSetup
               ? "画像の文字を翻訳して、気になった単語を貯めて、復習する。単語帳と履歴は、このアプリの保存先に保存されます。"
-              : "アプリ専用のパスワードを入力してください。CloudflareやGitHubへのログインは不要です。"}
+              : "アプリ専用のパスワードを入力してください。初回はCloudflareでデプロイするときに決めたパスワードを使います。"}
           </p>
         </div>
 
+        {recovered ? <p role="status">パスワードを再設定しました。新しいパスワードでログインしてください。</p> : null}
         <form className="stack" onSubmit={submit}>
           {error ? <div className="form-error">{error}</div> : null}
           <div className="field">
@@ -112,9 +134,15 @@ export function AuthPage({ mode }: { mode: "login" | "setup" }) {
               パスワードを忘れた場合
             </button>
             {showHelp ? (
-              <div className="hint-box" style={{ marginTop: 6 }}>
-                パスワードの再発行は、このアプリを管理しているパソコンで行います。スマホでCloudflareを設定する必要はありません。
-              </div>
+              <form className="stack hint-box" style={{ marginTop: 6 }} onSubmit={recover}>
+                <p>管理者はスマホでCloudflareのこのWorkerを開き、Settings → Variables and Secretsで、Secret「OWNER_RECOVERY_TOKEN」に新しい32〜200文字のランダムなキーを設定してDeployしてください。下に同じキーと新しいパスワードを入力します。キーは一度だけ使えます。</p>
+                <label className="label" htmlFor="recovery-token">復旧キー</label>
+                <PasswordInput id="recovery-token" value={recoveryToken} onChange={setRecoveryToken} autoComplete="off" required />
+                <label className="label" htmlFor="recovery-password">新しいパスワード（8〜200文字）</label>
+                <PasswordInput id="recovery-password" value={recoveryPassword} onChange={setRecoveryPassword} autoComplete="new-password" required />
+                <p>学習データは保持され、すべての端末からログアウトします。完了後はCloudflareから復旧キーを削除してください。</p>
+                <button type="submit" className="btn btn-primary" disabled={busy}>パスワードを再設定する</button>
+              </form>
             ) : null}
           </div>
         )}

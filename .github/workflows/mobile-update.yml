@@ -1,0 +1,45 @@
+name: Prepare app update
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '取り込む公式バージョン（タグ名またはコミットSHA。未指定はmain）'
+        required: false
+        default: main
+permissions:
+  contents: write
+concurrency:
+  group: prepare-app-update
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository != 'edoaki/glossframe'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Prepare a review branch (preserve deployment configuration)
+        env:
+          UPDATE_VERSION: ${{ inputs.version }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          [[ "$UPDATE_VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]
+          git check-ref-format --allow-onelevel "$UPDATE_VERSION"
+          git fetch --depth=1 https://github.com/edoaki/glossframe.git "$UPDATE_VERSION"
+          source_commit=$(git rev-parse FETCH_HEAD)
+          branch="app-update-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
+          git restore --source="$source_commit" --staged --worktree -- src public migrations scripts tests package.json package-lock.json index.html vite.config.ts vitest.config.ts tsconfig.json tsconfig.worker.json LICENSE
+          if git diff --cached --quiet; then
+            echo 'アプリは指定バージョンと同じです。' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Update app from edoaki/glossframe at $source_commit"
+          git push origin "$branch"
+          echo "取り込み元: \`$source_commit\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "[変更を確認してPull Requestを作成する](https://github.com/${GITHUB_REPOSITORY}/compare/${BASE_BRANCH}...${branch}?expand=1)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Wrangler設定・Secrets・DBは変更していません。PRのCheck成功後にMergeしてください。' >> "$GITHUB_STEP_SUMMARY"

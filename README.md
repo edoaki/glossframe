@@ -50,3 +50,9 @@ npm run check:public
 - [公開前の確認と私用データ](docs/PUBLICATION.md)
 - アプリのコードは [MIT](LICENSE)。第三者の辞書等は [ライセンス一覧](docs/THIRD-PARTY.md) に従います。
 - ブラウザのキャッシュ保持やAIの速度・正確性は保証されません。スマホ実機での速度は機種・画像・回線によって変わります。
+
+## スマホ導入の検証版
+
+[別のCloudflareアカウントへ導入する](https://deploy.workers.cloudflare.com/?url=https://github.com/edoaki/glossframe/tree/mobile-setup-preview)
+
+公式ボタンの実環境検証用ブランチです。[手順](docs/MOBILE-DEPLOYMENT.md)を参照してください。

@@ -12,6 +12,11 @@ export const setupSchema = z.object({
   password: z.string().min(8, "パスワードは8文字以上にしてください").max(200),
 });
 
+export const recoverySchema = z.object({
+  token: z.string().min(32).max(200),
+  newPassword: z.string().min(8).max(200),
+});
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(200),
   newPassword: z.string().min(8, "パスワードは8文字以上にしてください").max(200),

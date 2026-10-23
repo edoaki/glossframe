@@ -5,6 +5,13 @@ import {execFileSync} from 'node:child_process';
 const staged=process.argv.includes('--staged');
 const files=[...new Set(execFileSync('git',['ls-files','-z',...(staged?[]:['--cached','--others','--exclude-standard'])],{encoding:'utf8'}).split('\0').filter(Boolean))];
 const problems=[];
+// Provisioned IDs identify resources, but grant no access. Only recipient copies may publish them.
+let remote = '';
+try { remote = execFileSync('git', ['remote', 'get-url', 'origin'], {encoding:'utf8', stdio:['ignore','pipe','ignore']}).trim(); } catch {}
+const recipientCopy = process.env.GITHUB_REPOSITORY
+ ? process.env.GITHUB_REPOSITORY.toLowerCase() !== 'edoaki/glossframe'
+ : /github\.com[:/][^/]+\/[^/]+/.test(remote) && !/github\.com[:/]edoaki\/glossframe(?:\.git)?$/.test(remote);
+
 const forbidden=/(^|\/)(\.private|\.local-work|\.wrangler|node_modules|dist|mock|テスト用データセット|playwright-report|test-results)(\/|$)|(^|\/)(wrangler(?:\.local)?\.jsonc|実装メモ\.md|\.dev\.vars(?:\..*)?|\.env(?:\..*)?)$|\.(?:sqlite3?|db|pem|key|log)$/;
 const allowedExamples=new Set(['.dev.vars.example','.env.example']);
 const rules=[
@@ -24,6 +31,15 @@ for(const file of files){
  if(bytes.includes(0))continue;
  const text=bytes.toString('utf8');
  for(const [name,pattern] of rules)if(pattern.test(text))problems.push([file,name]);
+ if(file === 'wrangler.toml') {
+  if(/^\s*account_id\s*=/m.test(text))problems.push([file,'account-id']);
+  if(/^\s*(?:INITIAL_OWNER_PASSWORD|OWNER_RECOVERY_TOKEN|CF_ANALYTICS_TOKEN)\s*=/m.test(text))problems.push([file,'secret-in-config']);
+  if(!recipientCopy) {
+   for(const match of text.matchAll(/^\s*(?:database_id|id)\s*=\s*["']([^"']+)["']/gm)) {
+    if(!['00000000-0000-0000-0000-000000000000','00000000000000000000000000000000'].includes(match[1]))problems.push([file,'resource-id']);
+   }
+  }
+ }
  if(/wrangler.*example\.jsonc$/.test(file)){
   const config=JSON.parse(text);
   for(const d of config.d1_databases??[])if(!['00000000-0000-0000-0000-000000000000','local-db'].includes(d.database_id))problems.push([file,'resource-id']);

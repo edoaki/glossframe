@@ -17,7 +17,7 @@
     "kv:create": "wrangler kv namespace create IMAGES",
     "db:migrate": "CI=true wrangler d1 migrations apply DB --remote",
     "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc --persist-to .wrangler/local-app",
-    "deploy": "npm run build && npm run db:migrate && wrangler deploy",
+    "deploy": "npm run db:migrate && wrangler deploy",
     "dev:local": "node scripts/local-dev.mjs",
     "dev:local:offline": "node scripts/local-dev.mjs --offline",
     "ocr:lexicon": "node scripts/build-ocr-lexicon.mjs",
@@ -28,7 +28,8 @@
     "predev:local:offline": "npm run ocr:prepare",
     "password:reset": "node scripts/reset-password.mjs --remote",
     "check:public": "node scripts/check-public.mjs",
-    "test:smoke": "node scripts/smoke-app.mjs"
+    "test:smoke": "node scripts/smoke-app.mjs",
+    "deploy:full": "npm run build && npm run deploy"
   },
   "dependencies": {
     "hono": "^4.13.13",
@@ -57,5 +58,21 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "cloudflare": {
+    "bindings": {
+      "INITIAL_OWNER_PASSWORD": {
+        "description": "このアプリ専用の初期パスワードを8〜200文字で入力してください。CloudflareやGitHubのパスワードとは別にし、保存してください。初回ログインだけに使います。"
+      },
+      "DB": {
+        "description": "あなたの単語帳・翻訳履歴・認証情報を保存します。"
+      },
+      "IMAGES": {
+        "description": "保存を有効にした画像を保存します。"
+      },
+      "AI": {
+        "description": "あなたのCloudflareアカウントのWorkers AIを利用します。無料枠には上限があります。"
+      }
+    }
   }
 }

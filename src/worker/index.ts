@@ -19,6 +19,7 @@ const PUBLIC_API = new Set([
   "/api/health",
   "/api/auth/status",
   "/api/auth/login",
+  "/api/auth/recover",
   "/api/auth/setup",
   "/api/auth/logout",
 ]);

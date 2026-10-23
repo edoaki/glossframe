@@ -1,3 +1,4 @@
+import { ApiError } from "./errors";
 import type { Context, MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, Env, SessionRecord } from "./env";
@@ -27,7 +28,7 @@ function randomToken(bytes = 32): string {
   return bytesToBase64(data).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   const left = new TextEncoder().encode(a);
   const right = new TextEncoder().encode(b);
   let diff = left.length ^ right.length;
@@ -138,15 +139,16 @@ function sessionDays(env: Env): number {
 export async function createSession(
   c: Context<AppEnv>,
   meta: { userAgent?: string; ip?: string },
+  expectedPasswordHash?: string,
 ): Promise<void> {
   const token = randomToken(32);
   const tokenHash = await sha256Hex(token);
   const now = Date.now();
   const days = sessionDays(c.env);
   const expiresAt = now + days * 24 * 60 * 60 * 1000;
-  await c.env.DB.prepare(
+  const result = await c.env.DB.prepare(
     `INSERT INTO sessions (id, token_hash, created_at, expires_at, last_seen_at, user_agent, ip_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+     SELECT ?, ?, ?, ?, ?, ?, ? FROM owner WHERE id = 1 AND (? IS NULL OR password_hash = ?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -156,9 +158,14 @@ export async function createSession(
       now,
       (meta.userAgent ?? "").slice(0, 300),
       meta.ip ? await sha256Hex(meta.ip) : null,
+      expectedPasswordHash ?? null,
+      expectedPasswordHash ?? null,
     )
     .run();
 
+  if (!result.meta.changes) {
+    throw new ApiError(401, "PASSWORD_CHANGED", "パスワードが変更されました。もう一度ログインしてください。");
+  }
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
     secure: new URL(c.req.url).protocol === "https:",
@@ -256,16 +263,19 @@ export async function checkLoginRateLimit(c: Context<AppEnv>): Promise<{
   return { allowed: true, retryAfter: 0 };
 }
 
-export async function recordLoginAttempt(c: Context<AppEnv>, success: boolean): Promise<void> {
+export async function recordLoginAttempt(c: Context<AppEnv>, success: boolean): Promise<boolean> {
   const ipHash = await sha256Hex(clientIp(c));
   const now = Date.now();
   if (success) {
     await c.env.DB.prepare("DELETE FROM auth_attempts WHERE ip_hash = ?").bind(ipHash).run();
-    return;
+    return true;
   }
-  await c.env.DB.prepare(
-    "INSERT INTO auth_attempts (id, ip_hash, created_at, success) VALUES (?, ?, ?, 0)",
+  const result = await c.env.DB.prepare(
+    `INSERT INTO auth_attempts (id, ip_hash, created_at, success)
+     SELECT ?, ?, ?, 0 WHERE
+     (SELECT COUNT(*) FROM auth_attempts WHERE ip_hash = ? AND created_at > ?) < ?`,
   )
-    .bind(crypto.randomUUID(), ipHash, now)
+    .bind(crypto.randomUUID(), ipHash, now, ipHash, now - LOGIN_WINDOW_MS, LOGIN_MAX_ATTEMPTS)
     .run();
+  return Number(result.meta.changes) > 0;
 }
